@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>YouTube VPH Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header>
+  <h1>YouTube VPH Dashboard</h1>
+  <p class="sub">유튜브 영상의 시간당 조회수(VPH)를 계산해 순위로 보여줍니다.</p>
+</header>
+
+<main>
+  <section class="card">
+    <h2>API 키</h2>
+    <div class="row">
+      <input id="apiKey" type="password" placeholder="YouTube Data API v3 키 입력" />
+      <button id="saveKeyBtn">저장</button>
+      <button id="clearKeyBtn" class="ghost">삭제</button>
+    </div>
+    <small>브라우저 localStorage에만 저장됩니다.</small>
+  </section>
+
+  <section class="card">
+    <h2>수집 모드</h2>
+    <div class="tabs">
+      <button class="tab active" data-tab="by-urls">영상 URL</button>
+      <button class="tab" data-tab="by-channel">채널 업로드</button>
+      <button class="tab" data-tab="by-playlist">재생목록</button>
+      <button class="tab" data-tab="by-search">검색</button>
+    </div>
+
+    <div class="tabpanes">
+      <div class="pane active" id="by-urls">
+        <label>유튜브 영상 URL(여러 줄 가능)</label>
+        <textarea id="videoUrls" rows="4" placeholder="https://www.youtube.com/watch?v=..."></textarea>
+        <div class="row">
+          <button id="fetchFromUrls">불러오기</button>
+        </div>
+      </div>
+
+      <div class="pane" id="by-channel">
+        <label>채널 ID 또는 채널 URL(/channel/UC... 형태 권장)</label>
+        <input id="channelInput" placeholder="예: https://www.youtube.com/channel/UCxxxxxx" />
+        <div class="row">
+          <label class="inline">최신 개수</label>
+          <input id="channelLimit" type="number" min="1" max="200" value="50" />
+          <button id="fetchFromChannel">불러오기</button>
+        </div>
+        <small>핸들(@id) 주소는 API에서 직접 ID 변환이 안 될 수 있어 /channel/UC… 형태를 권장합니다.</small>
+      </div>
+
+      <div class="pane" id="by-playlist">
+        <label>재생목록 ID 또는 URL</label>
+        <input id="playlistInput" placeholder="예: PLxxxxxxxx" />
+        <div class="row">
+          <label class="inline">최신 개수</label>
+          <input id="playlistLimit" type="number" min="1" max="200" value="50" />
+          <button id="fetchFromPlaylist">불러오기</button>
+        </div>
+      </div>
+
+      <div class="pane" id="by-search">
+        <label>검색어</label>
+        <input id="searchQuery" placeholder="예: 축구 하이라이트" />
+        <div class="row">
+          <label class="inline">최신 개수</label>
+          <input id="searchLimit" type="number" min="1" max="50" value="25" />
+          <button id="fetchFromSearch">불러오기</button>
+        </div>
+        <small>정렬: 날짜 최신순</small>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>결과</h2>
+    <div class="toolbar">
+      <button id="exportCsvBtn" class="ghost">CSV 내보내기</button>
+      <span id="status"></span>
+    </div>
+    <div class="table-wrap">
+      <table id="resultTable">
+        <thead>
+          <tr>
+            <th data-sort="rank">#</th>
+            <th>썸네일</th>
+            <th data-sort="title">제목</th>
+            <th data-sort="channel">채널</th>
+            <th data-sort="views">조회수</th>
+            <th data-sort="ageHours">경과시간(시간)</th>
+            <th data-sort="vph">VPH</th>
+            <th>업로드</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <small>VPH 1,000+/h는 핫으로 강조됩니다.</small>
+  </section>
+</main>
+
+<footer>
+  <p>ⓒ VPH Dashboard (클라이언트 전용). *VPH는 vidIQ 내부 산식과 100% 동일하지 않을 수 있음.</p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

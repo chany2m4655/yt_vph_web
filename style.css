@@ -1,0 +1,53 @@
+:root { --bg:#0b1020; --card:#141b2f; --fg:#e8edf7; --muted:#9fb0d0; --accent:#5aa9ff; --hot:#ff5a5a; }
+* { box-sizing: border-box; }
+body {
+  margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans KR", Arial;
+  background: linear-gradient(180deg, #0b0f1e, #0b1020);
+  color: var(--fg);
+}
+header { padding:28px 20px; text-align:center; }
+h1 { margin:0 0 6px; font-size:26px; }
+.sub { color: var(--muted); margin:0; }
+
+main { max-width:1100px; margin:0 auto; padding: 0 16px 40px; }
+.card {
+  background: var(--card); border:1px solid #1d2540; border-radius:12px; padding:18px; margin:14px 0;
+  box-shadow: 0 6px 24px rgba(0,0,0,.25);
+}
+h2 { margin:0 0 12px; font-size:18px; }
+label { display:block; margin:8px 0 6px; color: var(--muted); }
+input, textarea, select, button {
+  border-radius:8px; border:1px solid #2a3357; background:#0e1430; color:#eef3ff; padding:10px 12px;
+}
+textarea, input[type="text"], input[type="password"] { width:100%; }
+textarea::placeholder, input::placeholder { color:#6f80a8; }
+
+.row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+button { cursor:pointer; border:1px solid #2f60a8; background:linear-gradient(180deg,#1a3c73,#183664); }
+button:hover { filter: brightness(1.05); }
+button.ghost { background: transparent; border-color:#40507a; }
+
+.tabs { display:flex; gap:8px; margin-bottom:10px; }
+.tab { background:#0f1635; border:1px solid #2a3357; }
+.tab.active { border-color:#4f7bd1; box-shadow: inset 0 0 0 1px #4f7bd1; }
+
+.tabpanes .pane { display:none; }
+.tabpanes .pane.active { display:block; }
+
+.inline { margin-right:8px; }
+
+.table-wrap { overflow:auto; border:1px solid #1d2540; border-radius:10px; }
+table { width:100%; border-collapse: collapse; font-size:14px; }
+thead th {
+  position: sticky; top:0; background:#162040; z-index:1; padding:10px; text-align:left; border-bottom:1px solid #263156; cursor:pointer;
+}
+tbody td { padding:10px; border-bottom:1px solid #1d2540; vertical-align:middle; }
+tbody tr:hover { background:#121a36; }
+td.thumb img { width:80px; height:45px; object-fit:cover; border-radius:6px; border:1px solid #31406d; }
+.badge {
+  display:inline-block; padding:2px 6px; border-radius:6px; font-size:12px; border:1px solid #385ea0; color:#cfe2ff; background:#0f2047;
+}
+.badge.hot { border-color:#a23a3a; background:#3a0f14; color:#ffb3b3; }
+small { color:#8aa0c8; }
+
+footer { text-align:center; color:#6c80a8; padding:20px; font-size:13px; }
