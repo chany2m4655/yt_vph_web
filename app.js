@@ -32,15 +32,25 @@ function extractPlaylistId(input) {
   if (/^PL|^UU|^LL|^FL/i.test(input.trim())) return input.trim();
   return null;
 }
-function extractChannelId(input) {
-  if (!input) return null;
+
+// NEW: flexible channel input parsing
+function parseChannelInput(input) {
+  const s = (input || '').trim();
+  if (!s) return {};
+  if (s.startsWith('UC') && s.length >= 20) return { channelId: s };
   try {
-    const u = new URL(input.trim());
-    if (u.pathname.startsWith('/channel/')) return u.pathname.split('/')[2];
-  } catch(e) { /* plain id? or @handle */ }
-  if (input.trim().startsWith('UC') && input.trim().length >= 20) return input.trim();
-  return null;
+    const u = new URL(s);
+    if (u.pathname.startsWith('/channel/')) return { channelId: u.pathname.split('/')[2] };
+    if (u.pathname.startsWith('/@')) return { handle: u.pathname.split('/')[1] };
+    if (u.pathname.startsWith('/c/')) return { username: u.pathname.split('/')[2] };
+    if (u.pathname.startsWith('/user/')) return { username: u.pathname.split('/')[2] };
+  } catch(e) {
+    if (s.startsWith('@')) return { handle: s.replace(/^@/, '') };
+    return { username: s };
+  }
+  return {};
 }
+
 function toCsv(rows) {
   const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const header = ["rank","title","channel","videoId","url","views","ageHours","vph","publishedAt"];
@@ -56,9 +66,13 @@ const API = {
   key: null,
   base: 'https://www.googleapis.com/youtube/v3',
 
+  // FIX: filter out undefined/null/'' params so invalid pageToken isn't sent
   async fetchJson(path, params) {
-    const query = new URLSearchParams({...params, key: this.key});
-    const res = await fetch(`${this.base}/${path}?${query}`);
+    const qs = new URLSearchParams();
+    Object.entries({ ...params, key: this.key }).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && String(v) !== '') qs.append(k, v);
+    });
+    const res = await fetch(`${this.base}/${path}?${qs}`);
     if (!res.ok) {
       const t = await res.text();
       throw new Error(`${res.status} ${res.statusText}: ${t}`);
@@ -66,6 +80,7 @@ const API = {
     return res.json();
   },
 
+  // videos: statistics + snippet
   async getVideosByIds(ids) {
     const out = [];
     for (let i=0; i<ids.length; i+=50) {
@@ -75,16 +90,14 @@ const API = {
         id: chunk.join(','),
         maxResults: 50
       });
-      out.push(...(data.items || []));
+        out.push(...(data.items || []));
     }
     return out;
   },
 
+  // channel uploads playlist id
   async getUploadsPlaylistId(channelId) {
-    const data = await this.fetchJson('channels', {
-      part: 'contentDetails',
-      id: channelId
-    });
+    const data = await this.fetchJson('channels', { part: 'contentDetails', id: channelId });
     const item = data.items?.[0];
     return item?.contentDetails?.relatedPlaylists?.uploads || null;
   },
@@ -97,7 +110,7 @@ const API = {
         part: 'contentDetails',
         playlistId,
         maxResults: Math.min(50, limit - ids.length),
-        pageToken
+        pageToken // will be removed by fetchJson if undefined
       });
       (data.items || []).forEach(it => {
         const vid = it.contentDetails?.videoId;
@@ -119,7 +132,7 @@ const API = {
         order: 'date',
         q: query,
         maxResults: Math.min(50, limit - ids.length),
-        pageToken
+        pageToken // removed if undefined
       });
       (data.items || []).forEach(it => {
         const vid = it.id?.videoId;
@@ -129,8 +142,37 @@ const API = {
       if (!pageToken) break;
     }
     return ids;
+  },
+
+  // NEW: resolve channel id from username (@handle or legacy)
+  async getChannelIdFromUsername(username) {
+    const data = await this.fetchJson('channels', { part: 'id', forUsername: username });
+    return data.items?.[0]?.id || null;
+  },
+  async getChannelIdFromHandle(handle) {
+    const data = await this.fetchJson('search', {
+      part: 'id',
+      type: 'channel',
+      q: '@' + handle.replace(/^@/, ''),
+      maxResults: 1
+    });
+    return data.items?.[0]?.id?.channelId || null;
   }
 };
+
+async function resolveChannelId(input) {
+  const parsed = parseChannelInput(input);
+  if (parsed.channelId) return parsed.channelId;
+  if (parsed.handle) {
+    const id = await API.getChannelIdFromHandle(parsed.handle);
+    if (id) return id;
+  }
+  if (parsed.username) {
+    const id = await API.getChannelIdFromUsername(parsed.username);
+    if (id) return id;
+  }
+  return null;
+}
 
 // ====== 렌더링 ======
 function renderRows(items) {
@@ -138,18 +180,16 @@ function renderRows(items) {
   tbody.innerHTML = '';
   items.forEach(r => {
     const tr = document.createElement('tr');
-
     const hot = r.vph >= 1000;
     const thumb = `https://i.ytimg.com/vi/${r.id}/hqdefault.jpg`;
-
     tr.innerHTML = `
       <td>${r.rank}</td>
       <td class="thumb"><a href="${r.url}" target="_blank" rel="noopener"><img alt="" src="${thumb}"></a></td>
       <td><a href="${r.url}" target="_blank" rel="noopener">${r.title}</a></td>
       <td>${r.channelTitle}</td>
-      <td>${new Intl.NumberFormat('en-US').format(r.viewCount)}</td>
+      <td>${nf.format(r.viewCount)}</td>
       <td>${r.ageHours.toFixed(2)}</td>
-      <td>${new Intl.NumberFormat('en-US').format(Math.round(r.vph))} ${hot ? '<span class="badge hot">HOT</span>' : ''}</td>
+      <td>${nf.format(Math.round(r.vph))} ${hot ? '<span class="badge hot">HOT</span>' : ''}</td>
       <td>${new Date(r.publishedAt).toLocaleString()}</td>
     `;
     tbody.appendChild(tr);
@@ -165,19 +205,12 @@ function computeVPH(items) {
     const publishedAt = sn.publishedAt;
     const ageHours = hoursBetween(publishedAt);
     const vph = viewCount / ageHours;
-
     return {
-      id,
-      title: sn.title || '(no title)',
-      channelTitle: sn.channelTitle || '',
-      publishedAt,
-      viewCount,
-      ageHours,
-      vph,
+      id, title: sn.title || '(no title)', channelTitle: sn.channelTitle || '',
+      publishedAt, viewCount, ageHours, vph,
       url: `https://www.youtube.com/watch?v=${id}`
     };
   }).filter(r => isFinite(r.vph) && r.ageHours > 0.01);
-
   rows.sort((a,b) => b.vph - a.vph);
   rows.forEach((r,i) => r.rank = i+1);
   return rows;
@@ -190,8 +223,10 @@ function setActiveTab(tabId) {
 }
 
 function bindUI() {
+  // tabs
   $$('.tab').forEach(btn => btn.addEventListener('click', () => setActiveTab(btn.dataset.tab)));
 
+  // API key load/save
   const saved = localStorage.getItem('yt_api_key');
   if (saved) $('#apiKey').value = saved;
   API.key = saved || null;
@@ -210,6 +245,7 @@ function bindUI() {
     toast('API 키 삭제됨.');
   };
 
+  // URLs
   $('#fetchFromUrls').onclick = async () => {
     try {
       if (!API.key) return toast('먼저 API 키를 저장하세요.');
@@ -225,13 +261,14 @@ function bindUI() {
     } catch (e) { toast(`오류: ${e.message}`); }
   };
 
+  // Channel uploads
   $('#fetchFromChannel').onclick = async () => {
     try {
       if (!API.key) return toast('먼저 API 키를 저장하세요.');
       const inp = $('#channelInput').value.trim();
       const limit = Math.max(1, Math.min(200, Number($('#channelLimit').value || 50)));
-      const chId = extractChannelId(inp);
-      if (!chId) return toast('채널 ID 또는 /channel/UC… URL을 입력하세요.');
+      const chId = await resolveChannelId(inp);
+      if (!chId) return toast('채널 ID/핸들/사용자명을 확인하세요.');
       toast('채널 업로드 재생목록 확인 중...');
       const upl = await API.getUploadsPlaylistId(chId);
       if (!upl) return toast('업로드 재생목록을 찾을 수 없습니다.');
@@ -245,6 +282,7 @@ function bindUI() {
     } catch (e) { toast(`오류: ${e.message}`); }
   };
 
+  // Playlist
   $('#fetchFromPlaylist').onclick = async () => {
     try {
       if (!API.key) return toast('먼저 API 키를 저장하세요.');
@@ -262,6 +300,7 @@ function bindUI() {
     } catch (e) { toast(`오류: ${e.message}`); }
   };
 
+  // Search
   $('#fetchFromSearch').onclick = async () => {
     try {
       if (!API.key) return toast('먼저 API 키를 저장하세요.');
@@ -278,6 +317,7 @@ function bindUI() {
     } catch (e) { toast(`오류: ${e.message}`); }
   };
 
+  // CSV
   $('#exportCsvBtn').onclick = () => {
     const rows = window.__rows || [];
     if (!rows.length) return toast('내보낼 데이터가 없습니다.');
@@ -289,6 +329,7 @@ function bindUI() {
     setTimeout(()=>URL.revokeObjectURL(url), 1000);
   };
 
+  // Sort headers
   $$('#resultTable thead th[data-sort]').forEach(th => {
     th.addEventListener('click', () => {
       const key = th.dataset.sort;
